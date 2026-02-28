@@ -135,4 +135,4 @@ OSLI prioritizes informative feedback over generic errors. We follow standard HT
 ---
 
 ## 💡 Innovation & Utility
-OSLI isn't just a wrapper. It uses **Stateful Data** (the SPDX database) to ensure legal correctness, and **Generative AI** to provide human-readable strategy. It solves the "License Paradox": knowing a license is `GPL` is easy, but knowing *why* that's a problem for your specific startup is what OSLI delivers.
+OSLI uses **Stateful Data** (the SPDX database) to ensure legal correctness, and **Generative AI** to provide human-readable strategy. It solves the "License Paradox": knowing a license is `GPL` is easy, but knowing *why* that's a problem for your specific codebase/project file is what OSLI delivers.
