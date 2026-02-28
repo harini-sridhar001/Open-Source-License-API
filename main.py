@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
@@ -113,6 +114,35 @@ class SearchResult(BaseModel):
 class SearchResponse(BaseModel):
     results: List[SearchResult]
 
+class AlternativesRequest(BaseModel):
+    package_name: str
+    desired_license: str
+
+class AlternativeResult(BaseModel):
+    name: str
+    license: str
+    reason: str
+
+class AlternativesResponse(BaseModel):
+    results: List[AlternativeResult]
+
+class HeaderRequest(BaseModel):
+    project_name: str
+    license_id: str # e.g., "MIT", "Apache-2.0"
+    language: str   # e.g., "Python", "JavaScript", "C++"
+    copyright_holder: Optional[str] = None # Defaults to "Project Name"
+
+class HeaderResponse(BaseModel):
+    header_text: str
+
+class LicenseInfoResponse(BaseModel):
+    licenseId: str
+    name: str
+    seeAlso: List[str]
+    isOsiApproved: bool
+    isDeprecatedLicenseId: bool
+    licenseText: Optional[str] = None
+
 # Helper
 def extract_npm_license(package_data: dict) -> str:
     license_data = package_data.get("license") or package_data.get("licenses")
@@ -193,6 +223,100 @@ async def analyze_package(request: AnalyzeRequest):
         raise HTTPException(status_code=500, detail="Failed to parse AI response.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI inference error: {e}")
+
+
+@app.post("/v1/alternatives", response_model=AlternativesResponse)
+async def find_alternatives(request: AlternativesRequest):
+    """Finds open source alternatives with a specific license for a given library."""
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="Gemini API Key is missing.")
+
+    model = genai.GenerativeModel('gemini-2.5-flash')
+    prompt = f'''
+    The user is looking for open-source alternatives to the library '{request.package_name}' 
+    that are licensed under '{request.desired_license}'.
+    
+    Provide exactly 3 library suggestions.
+    Respond STRICTLY in JSON format as an array of objects.
+    Each object must have these exact fields:
+    - "name": string
+    - "license": string
+    - "reason": string (why it is a good alternative)
+    
+    Do NOT wrap the output in markdown code blocks like ```json. Output raw JSON only.
+    '''
+    
+    try:
+        response = model.generate_content(prompt)
+        text = response.text.strip()
+        if text.startswith("```json"): text = text[7:]
+        if text.endswith("```"): text = text[:-3]
+        text = text.strip()
+        
+        data = json.loads(text)
+        return AlternativesResponse(results=data)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Failed to parse AI response.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI inference error: {e}")
+
+
+@app.post("/v1/generate-header", response_model=HeaderResponse)
+async def generate_header(request: HeaderRequest):
+    """Generates a standard legal header for a source code file."""
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="Gemini API Key is missing.")
+
+    copyright_holder = request.copyright_holder or request.project_name
+    from datetime import datetime
+    year = datetime.now().year
+
+    model = genai.GenerativeModel('gemini-2.5-flash')
+    prompt = f'''
+    Generate a professional and legally compliant source-file header for the project '{request.project_name}'.
+    The license for this project is '{request.license_id}'.
+    The programming language is '{request.language}'.
+    The copyright holder is '{copyright_holder}'.
+    The current year is '{year}'.
+
+    Requirements:
+    - Use the correct comment style for '{request.language}' (e.g., # for Python, /* */ for JS).
+    - Include the standard short-form copyright notice.
+    - Briefly state the name of the license and how the user can find the full text.
+    - Ensure it is ready to be prepended to a file.
+
+    Output the raw header text ONLY. Do NOT wrap it in markdown code blocks like ```python.
+    '''
+
+    try:
+        response = model.generate_content(prompt)
+        text = response.text.strip()
+        # Strip any markdown code block wrappers just in case
+        if text.startswith("```"):
+            lines = text.splitlines()
+            if lines[0].startswith("```"): lines = lines[1:]
+            if lines[-1] == "```": lines = lines[:-1]
+            text = "\n".join(lines).strip()
+            
+        return HeaderResponse(header_text=text)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate header: {e}")
+
+
+@app.get("/v1/licenses/{license_id}", response_model=LicenseInfoResponse)
+async def get_license_info(license_id: str):
+    """Returns deep-dive metadata for a specific SPDX license."""
+    if license_id not in licenses_db:
+        raise HTTPException(status_code=404, detail="License not found in SPDX database.")
+    
+    data = licenses_db[license_id]
+    return LicenseInfoResponse(
+        licenseId=data.get("licenseId"),
+        name=data.get("name"),
+        seeAlso=data.get("seeAlso", []),
+        isOsiApproved=data.get("isOsiApproved", False),
+        isDeprecatedLicenseId=data.get("isDeprecatedLicenseId", False)
+    )
 
 
 @app.post("/v1/audit", response_model=AuditResponse)
