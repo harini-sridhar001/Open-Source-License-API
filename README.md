@@ -17,15 +17,6 @@ Base API URL: https://open-source-license-api.onrender.com
 ### 💡 The Inspiration
 Every developer has been there: you find the perfect open-source library that solves all your problems, only to realize your company’s legal team might reject it because of a "Copyleft" clause or a restrictive license you don't fully understand. In the high-speed world of modern software engineering, **legal compliance is the ultimate bottleneck.** We built OSLI to act as a "Digital Legal Assistant," turning complex legal jargon into actionable, developer-friendly data.
 
-### 🚀 How We Built It
-OSLI is built on an "Intelligence-First" architecture.
-- **The Body (FastAPI):** High-performance framework with automatic interactive documentation.
-- **The Memory (SPDX Data):** Integrated official SPDX license database for deterministic lookups.
-- **The Brain (Google Gemini 1.5 Flash):** Handles the "gray areas"—analyzing risks based on specific business contexts.
-
-### 🧠 Challenges We Faced
-Mapping the NPM registry's messy license metadata was our biggest hurdle. We built a robust extraction engine to normalize strings, lists, and objects into a single source of truth for our analysis engine.
-
 ---
 
 ## 🛠 Tech Stack
