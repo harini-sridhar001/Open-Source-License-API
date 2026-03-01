@@ -56,7 +56,7 @@ Mapping the NPM registry's messy license metadata was our biggest hurdle. We bui
 ### 🔍 Group 1: Discovery & Research
 
 #### **1. Smart Library Search**
-AI-powered library discovery based on license requirements.
+AI-powered library discovery based on specific functionality and license needs.
 ```bash
 curl -X POST "http://127.0.0.1:8000/v1/search" \
      -H "Content-Type: application/json" \
@@ -80,8 +80,33 @@ curl -X POST "http://127.0.0.1:8000/v1/search" \
 }
 ```
 
-#### **2. Deep-Dive License Info**
-Returns official metadata for a specific SPDX license ID.
+#### **2. Safe-Alternative Finder**
+Finds permissive alternatives (e.g., MIT) for a specific restrictive library.
+```bash
+curl -X POST "http://127.0.0.1:8000/v1/alternatives" \
+     -H "Content-Type: application/json" \
+     -d '{ "package_name": "highcharts", "desired_license": "MIT" }'
+```
+**Expected Response:**
+```json
+{
+  "results": [
+    {
+      "name": "ApexCharts",
+      "license": "MIT",
+      "reason": "Direct alternative with similar feature set and MIT license."
+    },
+    {
+      "name": "Chart.js",
+      "license": "MIT",
+      "reason": "Standard for simple interactive charts with an MIT license."
+    }
+  ]
+}
+```
+
+#### **3. Deep-Dive License Info**
+Returns official SPDX metadata for a specific license ID.
 ```bash
 curl -X GET "http://127.0.0.1:8000/v1/licenses/MIT"
 ```
@@ -100,8 +125,8 @@ curl -X GET "http://127.0.0.1:8000/v1/licenses/MIT"
 
 ### 🛡️ Group 2: Risk & Compliance
 
-#### **3. Analyze Package Risk**
-Contextual AI risk scoring (0-100) based on your business model.
+#### **4. Analyze Package Risk**
+Contextual AI risk scoring (0-100) based on your specific business context.
 ```bash
 curl -X POST "http://127.0.0.1:8000/v1/analyze" \
      -H "Content-Type: application/json" \
@@ -119,7 +144,7 @@ curl -X POST "http://127.0.0.1:8000/v1/analyze" \
 }
 ```
 
-#### **4. Audit Dependencies**
+#### **5. Audit Dependencies**
 Batch "Traffic Light" scan (SAFE/WARN) for a list of packages.
 ```bash
 curl -X POST "http://127.0.0.1:8000/v1/audit" \
@@ -131,14 +156,13 @@ curl -X POST "http://127.0.0.1:8000/v1/audit" \
 {
   "results": [
     { "package": "react", "license": "MIT", "status": "SAFE" },
-    { "package": "lodash", "license": "MIT", "status": "SAFE" },
     { "package": "ffmpeg", "license": "LGPL-2.1", "status": "WARN" }
   ]
 }
 ```
 
-#### **5. Compatibility Check**
-Quick deterministic check if two licenses are compatible.
+#### **6. Compatibility Check**
+Quick deterministic check if two licenses are legally compatible.
 ```bash
 curl -X POST "http://127.0.0.1:8000/v1/compatibility-check" \
      -H "Content-Type: application/json" \
@@ -152,12 +176,30 @@ curl -X POST "http://127.0.0.1:8000/v1/compatibility-check" \
 }
 ```
 
+#### **7. Conflict Resolution (Legal Patch)**
+AI-powered tool to resolve license conflicts between two packages.
+```bash
+curl -X POST "http://127.0.0.1:8000/v1/resolve-conflicts" \
+     -H "Content-Type: application/json" \
+     -d '{ "package_a": "ffmpeg", "package_b": "highcharts" }'
+```
+**Expected Response:**
+```json
+{
+  "has_conflict": true,
+  "conflict_reason": "Highcharts commercial license conflicts with LGPL-2.1 requirements.",
+  "suggested_alternative": "ApexCharts",
+  "alternative_license": "MIT",
+  "explanation": "Replacing Highcharts with ApexCharts resolves the conflict."
+}
+```
+
 ---
 
 ### ⌨️ Group 3: Automation & DevTools
 
-#### **6. License Header Generator**
-AI-generated legal headers formatted for specific programming languages.
+#### **8. License Header Generator**
+Generates a professional legal header for source files.
 ```bash
 curl -X POST "http://127.0.0.1:8000/v1/generate-header" \
      -H "Content-Type: application/json" \
@@ -178,8 +220,8 @@ OSLI prioritizes informative feedback over generic errors. We follow standard HT
 
 - **200 OK**: Request was successful.
 - **400 Bad Request**: Invalid SPDX License ID or missing parameters.
-- **404 Not Found**: Package not found on NPM or License ID does not exist in SPDX database.
-- **500 Internal Server Error**: Issues with AI inference or upstream registry timeouts.
+- **404 Not Found**: Package not found on NPM or License ID does not exist.
+- **500 Internal Error**: Issues with AI inference or registry timeouts.
 
 **Example 400 Response (Invalid License):**
 ```json
