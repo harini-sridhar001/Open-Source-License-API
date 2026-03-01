@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 from typing import Dict, Any, List, Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 import httpx
 import google.generativeai as genai
@@ -73,6 +75,15 @@ app = FastAPI(
     description="Intelligent tools for license analysis, risk assessment, and legal automation.",
     version="1.0.0",
     lifespan=lifespan
+)
+
+# Enable CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # Allow all origins for the hackathon
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # --- Models ---
@@ -172,6 +183,11 @@ def extract_npm_license(package_data: dict) -> str:
     return "Unknown"
 
 # --- Endpoints ---
+
+@app.get("/", include_in_schema=False)
+async def root_redirect():
+    """Redirects the root path to the interactive API documentation."""
+    return RedirectResponse(url="/docs")
 
 # GROUP 1: Discovery & Research
 @app.post("/v1/search", response_model=SearchResponse, tags=["Discovery & Research"])
