@@ -4,10 +4,10 @@ import os
 from contextlib import asynccontextmanager
 from typing import Dict, Any, List, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import httpx
 import google.generativeai as genai
 
@@ -40,18 +40,6 @@ COMPATIBILITY_MATRIX = {
     "BSD-3-Clause": {
         "MIT": True, "Apache-2.0": True, "GPL-2.0": True, "GPL-3.0": True,
         "BSD-3-Clause": True, "AGPL-3.0": True, "LGPL-3.0": True, "MPL-2.0": True
-    },
-    "AGPL-3.0": {
-        "MIT": True, "Apache-2.0": True, "GPL-2.0": False, "GPL-3.0": True,
-        "BSD-3-Clause": True, "AGPL-3.0": True, "LGPL-3.0": True, "MPL-2.0": True
-    },
-    "LGPL-3.0": {
-        "MIT": True, "Apache-2.0": True, "GPL-2.0": False, "GPL-3.0": True,
-        "BSD-3-Clause": True, "AGPL-3.0": True, "LGPL-3.0": True, "MPL-2.0": True
-    },
-    "MPL-2.0": {
-        "MIT": True, "Apache-2.0": False, "GPL-2.0": True, "GPL-3.0": True,
-        "BSD-3-Clause": True, "AGPL-3.0": True, "LGPL-3.0": True, "MPL-2.0": True
     }
 }
 
@@ -65,22 +53,26 @@ async def lifespan(app: FastAPI):
                 licenses_db[license_info["licenseId"]] = license_info
         print(f"Loaded {len(licenses_db)} licenses into memory.")
     except FileNotFoundError:
-        print("Warning: licenses.json not found.")
+        print("Warning: licenses.json not found. Run 'curl -o licenses.json https://raw.githubusercontent.com/spdx/license-list-data/master/json/licenses.json'")
     except json.JSONDecodeError:
         print("Error: licenses.json is invalid JSON.")
     yield
 
 app = FastAPI(
     title="OSLI: Open Source License Intelligence API",
-    description="Intelligent tools for license analysis, risk assessment, and legal automation.",
-    version="1.0.0",
-    lifespan=lifespan
+    description="Intelligent tools for license analysis, risk assessment, and legal automation. Built for HackIllinois 2026.",
+    version="1.1.0",
+    lifespan=lifespan,
+    contact={
+        "name": "OSLI Support",
+        "url": "https://github.com/spdx/license-list-data",
+    }
 )
 
-# Enable CORS
+# Enable CORS for Hackathon compatibility
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allow all origins for the hackathon
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -88,9 +80,8 @@ app.add_middleware(
 
 # --- Models ---
 
-# Discovery Models
 class SearchRequest(BaseModel):
-    query: str
+    query: str = Field(..., example="Chart library for a closed-source SaaS")
 
 class SearchResult(BaseModel):
     name: str
@@ -101,8 +92,8 @@ class SearchResponse(BaseModel):
     results: List[SearchResult]
 
 class AlternativesRequest(BaseModel):
-    package_name: str
-    desired_license: str
+    package_name: str = Field(..., example="highcharts")
+    desired_license: str = Field(..., example="MIT")
 
 class AlternativeResult(BaseModel):
     name: str
@@ -120,18 +111,17 @@ class LicenseInfoResponse(BaseModel):
     isDeprecatedLicenseId: bool
     licenseText: Optional[str] = None
 
-# Risk & Compliance Models
 class CompatibilityRequest(BaseModel):
-    license_a: str
-    license_b: str
+    license_a: str = Field(..., example="MIT")
+    license_b: str = Field(..., example="GPL-3.0")
 
 class CompatibilityResponse(BaseModel):
     compatible: bool
     reason: str
 
 class AnalyzeRequest(BaseModel):
-    package_name: str
-    context: str
+    package_name: str = Field(..., example="mongodb")
+    context: str = Field(..., example="Commercial closed-source SaaS")
 
 class AnalyzeResponse(BaseModel):
     risk_score: int
@@ -139,7 +129,7 @@ class AnalyzeResponse(BaseModel):
     warnings: List[str]
 
 class AuditRequest(BaseModel):
-    dependencies: List[str]
+    dependencies: List[str] = Field(..., example=["react", "lodash", "ffmpeg"])
 
 class AuditItem(BaseModel):
     package: str
@@ -150,8 +140,8 @@ class AuditResponse(BaseModel):
     results: List[AuditItem]
 
 class ConflictResolutionRequest(BaseModel):
-    package_a: str
-    package_b: str
+    package_a: str = Field(..., example="ffmpeg")
+    package_b: str = Field(..., example="highcharts")
     context: Optional[str] = "Commercial SaaS"
 
 class ConflictResolutionResponse(BaseModel):
@@ -161,18 +151,75 @@ class ConflictResolutionResponse(BaseModel):
     alternative_license: Optional[str] = None
     explanation: str
 
-# Automation Models
 class HeaderRequest(BaseModel):
-    project_name: str
-    license_id: str
-    language: str
+    project_name: str = Field(..., example="Nebula")
+    license_id: str = Field(..., example="MIT")
+    language: str = Field(..., example="Python")
     copyright_holder: Optional[str] = None
 
 class HeaderResponse(BaseModel):
     header_text: str
 
-# --- Helper ---
+# --- Helpers ---
+
+def validate_license_id(license_id: str):
+    """Ensures a license ID is a valid SPDX identifier."""
+    if license_id not in licenses_db:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"License ID '{license_id}' is not recognized. Check https://spdx.org/licenses/ for valid IDs (e.g., 'MIT', 'Apache-2.0')."
+        )
+
+async def call_gemini_ai(prompt: str):
+    """Unified wrapper for AI calls with specific error handling."""
+    if not GEMINI_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI services are unavailable (Missing API Key)."
+        )
+
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = await asyncio.to_thread(model.generate_content, prompt)
+        text = response.text.strip()
+        
+        # Strip potential markdown code blocks
+        if text.startswith("```json"): text = text[7:]
+        elif text.startswith("```"): text = text[3:]
+        if text.endswith("```"): text = text[:-3]
+        
+        return json.loads(text.strip())
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The AI returned a malformed response. This usually happens with complex requests; please try again."
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"AI Error: {str(e)}"
+        )
+
+async def get_npm_data(package_name: str):
+    """Fetches data from NPM with specific error handling."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            res = await client.get(f"https://registry.npmjs.org/{package_name}")
+            if res.status_code == 404:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Package '{package_name}' not found on NPM."
+                )
+            res.raise_for_status()
+            return res.json()
+        except httpx.RequestError:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="The NPM Registry is currently unreachable. Please try again later."
+            )
+
 def extract_npm_license(package_data: dict) -> str:
+    """Safely extracts license info from complex NPM metadata."""
     license_data = package_data.get("license") or package_data.get("licenses")
     if isinstance(license_data, dict):
         return license_data.get("type", "Unknown")
@@ -186,51 +233,32 @@ def extract_npm_license(package_data: dict) -> str:
 
 @app.get("/", include_in_schema=False)
 async def root_redirect():
-    """Redirects the root path to the interactive API documentation."""
+    """Redirects to the interactive API documentation."""
     return RedirectResponse(url="/docs")
 
-# GROUP 1: Discovery & Research
 @app.post("/v1/search", response_model=SearchResponse, tags=["Discovery & Research"])
 async def search_libraries(request: SearchRequest):
-    """AI-powered search to find the right libraries based on your license needs."""
-    if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="Gemini API Key missing.")
-
-    model = genai.GenerativeModel('gemini-2.5-flash')
-    prompt = f"Find 3 libraries for: '{request.query}'. Respond in JSON array with name, license, reason."
-    
-    try:
-        response = model.generate_content(prompt)
-        text = response.text.strip()
-        if text.startswith("```json"): text = text[7:]
-        if text.endswith("```"): text = text[:-3]
-        return SearchResponse(results=json.loads(text.strip()))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI Error: {e}")
+    """AI-powered search for libraries based on license requirements."""
+    prompt = f"Find 3 libraries for: '{request.query}'. Respond in JSON array with name, license, reason. No extra text."
+    data = await call_gemini_ai(prompt)
+    return SearchResponse(results=data)
 
 @app.post("/v1/alternatives", response_model=AlternativesResponse, tags=["Discovery & Research"])
 async def find_alternatives(request: AlternativesRequest):
-    """Finds friendly alternatives (e.g. MIT) for a restrictive library."""
-    if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="Gemini API Key missing.")
-
-    model = genai.GenerativeModel('gemini-2.5-flash')
-    prompt = f"Find 3 alternatives to '{request.package_name}' with license '{request.desired_license}'. Respond in JSON array with name, license, reason."
-    
-    try:
-        response = model.generate_content(prompt)
-        text = response.text.strip()
-        if text.startswith("```json"): text = text[7:]
-        if text.endswith("```"): text = text[:-3]
-        return AlternativesResponse(results=json.loads(text.strip()))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI Error: {e}")
+    """Finds permissive alternatives for a restrictive library."""
+    validate_license_id(request.desired_license)
+    prompt = f"Find 3 alternatives to '{request.package_name}' with license '{request.desired_license}'. Respond in JSON array with name, license, reason. No extra text."
+    data = await call_gemini_ai(prompt)
+    return AlternativesResponse(results=data)
 
 @app.get("/v1/licenses/{license_id}", response_model=LicenseInfoResponse, tags=["Discovery & Research"])
 async def get_license_info(license_id: str):
     """Returns official SPDX metadata for a specific license ID."""
     if license_id not in licenses_db:
-        raise HTTPException(status_code=404, detail="License not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"License '{license_id}' not found. Try 'Apache-2.0' instead of 'Apache'."
+        )
     data = licenses_db[license_id]
     return LicenseInfoResponse(
         licenseId=data.get("licenseId"),
@@ -240,52 +268,50 @@ async def get_license_info(license_id: str):
         isDeprecatedLicenseId=data.get("isDeprecatedLicenseId", False)
     )
 
-# GROUP 2: Risk & Compliance
 @app.post("/v1/analyze", response_model=AnalyzeResponse, tags=["Risk & Compliance"])
 async def analyze_package(request: AnalyzeRequest):
     """Analyzes the risk of a specific NPM package for your business context."""
-    if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="Gemini API Key missing.")
+    pkg_data = await get_npm_data(request.package_name)
+    pkg_license = extract_npm_license(pkg_data)
 
-    async with httpx.AsyncClient() as client:
-        res = await client.get(f"https://registry.npmjs.org/{request.package_name}")
-        if res.status_code != 200: raise HTTPException(status_code=404, detail="Package not found")
-        pkg_license = extract_npm_license(res.json())
-
-    model = genai.GenerativeModel('gemini-2.5-flash')
-    prompt = f"Analyze risk for '{request.package_name}' ({pkg_license}) in context '{request.context}'. Respond in JSON: risk_score (0-100), summary, warnings (list)."
-    
-    try:
-        response = model.generate_content(prompt)
-        text = response.text.strip()
-        if text.startswith("```json"): text = text[7:]
-        if text.endswith("```"): text = text[:-3]
-        return AnalyzeResponse(**json.loads(text.strip()))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI Error: {e}")
+    prompt = f"Analyze risk for '{request.package_name}' ({pkg_license}) in context '{request.context}'. Respond in JSON: risk_score (0-100), summary, warnings (list). No extra text."
+    data = await call_gemini_ai(prompt)
+    return AnalyzeResponse(**data)
 
 @app.post("/v1/audit", response_model=AuditResponse, tags=["Risk & Compliance"])
 async def audit_dependencies(request: AuditRequest):
     """Batch scans a list of dependencies for safety warnings."""
     results = []
     safe_licenses = ["MIT", "Apache-2.0", "ISC", "BSD-2-Clause", "BSD-3-Clause", "WTFPL"]
-    async with httpx.AsyncClient() as client:
-        for dep in request.dependencies:
-            try:
-                res = await client.get(f"https://registry.npmjs.org/{dep}")
-                pkg_license = extract_npm_license(res.json()) if res.status_code == 200 else "Unknown"
-                status = "SAFE" if pkg_license in safe_licenses else "WARN"
-                results.append(AuditItem(package=dep, license=pkg_license, status=status))
-            except:
-                results.append(AuditItem(package=dep, license="Error", status="WARN"))
+    
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        tasks = [client.get(f"https://registry.npmjs.org/{dep}") for dep in request.dependencies]
+        responses = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        for i, res in enumerate(responses):
+            dep_name = request.dependencies[i]
+            if isinstance(res, httpx.Response) and res.status_code == 200:
+                pkg_license = extract_npm_license(res.json())
+                status_str = "SAFE" if pkg_license in safe_licenses else "WARN"
+                results.append(AuditItem(package=dep_name, license=pkg_license, status=status_str))
+            else:
+                results.append(AuditItem(package=dep_name, license="Unknown/Error", status="WARN"))
+                
     return AuditResponse(results=results)
 
 @app.post("/v1/compatibility-check", response_model=CompatibilityResponse, tags=["Risk & Compliance"])
 async def compatibility_check(request: CompatibilityRequest):
     """Quick deterministic check if two licenses are compatible."""
+    validate_license_id(request.license_a)
+    validate_license_id(request.license_b)
+    
     a, b = request.license_a, request.license_b
     if a not in COMPATIBILITY_MATRIX or b not in COMPATIBILITY_MATRIX.get(a, {}):
-        return CompatibilityResponse(compatible=False, reason="Data missing for this pair.")
+        return CompatibilityResponse(
+            compatible=False, 
+            reason=f"Detailed data for '{a}' vs '{b}' is missing. Try /v1/resolve-conflicts for AI analysis."
+        )
+    
     is_compatible = COMPATIBILITY_MATRIX[a][b]
     reason = f"{a} is compatible with {b}." if is_compatible else f"{a} conflicts with {b}."
     return CompatibilityResponse(compatible=is_compatible, reason=reason)
@@ -293,49 +319,29 @@ async def compatibility_check(request: CompatibilityRequest):
 @app.post("/v1/resolve-conflicts", response_model=ConflictResolutionResponse, tags=["Risk & Compliance"])
 async def resolve_conflicts(request: ConflictResolutionRequest):
     """Detects conflicts and suggests a 'Legal Patch' (alternative library)."""
-    if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="Gemini API Key missing.")
+    data_a = await get_npm_data(request.package_a)
+    data_b = await get_npm_data(request.package_b)
+    lic_a, lic_b = extract_npm_license(data_a), extract_npm_license(data_b)
 
-    async with httpx.AsyncClient() as client:
-        res_a = await client.get(f"https://registry.npmjs.org/{request.package_a}")
-        res_b = await client.get(f"https://registry.npmjs.org/{request.package_b}")
-        if res_a.status_code != 200 or res_b.status_code != 200:
-            raise HTTPException(status_code=404, detail="Package(s) not found.")
-        lic_a, lic_b = extract_npm_license(res_a.json()), extract_npm_license(res_b.json())
+    prompt = f"Check conflict: {request.package_a} ({lic_a}) vs {request.package_b} ({lic_b}). If conflict, suggest alternative for one. Respond JSON: has_conflict, conflict_reason, suggested_alternative, alternative_license, explanation. No extra text."
+    data = await call_gemini_ai(prompt)
+    return ConflictResolutionResponse(**data)
 
-    model = genai.GenerativeModel('gemini-2.5-flash')
-    prompt = f"Check conflict: {request.package_a} ({lic_a}) vs {request.package_b} ({lic_b}). If conflict, suggest alternative for one. Respond JSON: has_conflict, conflict_reason, suggested_alternative, alternative_license, explanation."
-    
-    try:
-        response = model.generate_content(prompt)
-        text = response.text.strip()
-        if text.startswith("```json"): text = text[7:]
-        if text.endswith("```"): text = text[:-3]
-        return ConflictResolutionResponse(**json.loads(text.strip()))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI Error: {e}")
-
-# GROUP 3: Automation & DevTools
 @app.post("/v1/generate-header", response_model=HeaderResponse, tags=["Automation & DevTools"])
 async def generate_header(request: HeaderRequest):
-    """Generates a professional legal header to prepend to your source files."""
-    if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="Gemini API Key missing.")
-
+    """Generates a professional legal header for source files."""
+    validate_license_id(request.license_id)
     holder = request.copyright_holder or request.project_name
-    from datetime import datetime
-    year = datetime.now().year
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    year = 2026
+
     prompt = f"Generate a {request.license_id} header for project '{request.project_name}' in {request.language} for holder '{holder}' (Year {year}). Raw text only, no markdown."
     
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="AI services unavailable.")
+
     try:
-        response = model.generate_content(prompt)
-        text = response.text.strip()
-        if text.startswith("```"):
-            lines = text.splitlines()
-            if lines[0].startswith("```"): lines = lines[1:]
-            if lines[-1] == "```": lines = lines[:-1]
-            text = "\n".join(lines).strip()
-        return HeaderResponse(header_text=text)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = await asyncio.to_thread(model.generate_content, prompt)
+        return HeaderResponse(header_text=response.text.strip())
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI Error: {e}")
+        raise HTTPException(status_code=500, detail=f"AI Header Error: {str(e)}")

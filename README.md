@@ -1,5 +1,5 @@
 # OSLI: Open Source License Intelligence API
-
+### *2026 HackIllinois Submission: Best Web API Track*
 
 **OSLI** is an intelligent compliance engine designed to bridge the gap between complex open-source legal jargon and real-world developer workflows. By combining **deterministic SPDX data** with **Gemini AI reasoning**, OSLI provides a developer experience that is predictable, correct, and delightful.
 
@@ -11,10 +11,10 @@
 Every developer has been there: you find the perfect open-source library that solves all your problems, only to realize your company’s legal team might reject it because of a "Copyleft" clause or a restrictive license you don't fully understand. In the high-speed world of modern software engineering, **legal compliance is the ultimate bottleneck.** We built OSLI to act as a "Digital Legal Assistant," turning complex legal jargon into actionable, developer-friendly data.
 
 ### 🚀 How We Built It
-OSLI is built on a "Stateful Intelligence" architecture.
+OSLI is built on an "Intelligence-First" architecture.
 - **The Body (FastAPI):** High-performance framework with automatic interactive documentation.
-- **The Memory (Stateful SPDX Data):** Integrated official SPDX license database for O(1) deterministic lookups.
-- **The Brain (Google Gemini 2.5 Flash):** Handles the "gray areas"—analyzing risks based on specific business contexts.
+- **The Memory (SPDX Data):** Integrated official SPDX license database for deterministic lookups.
+- **The Brain (Google Gemini 1.5 Flash):** Handles the "gray areas"—analyzing risks based on specific business contexts.
 
 ### 🧠 Challenges We Faced
 Mapping the NPM registry's messy license metadata was our biggest hurdle. We built a robust extraction engine to normalize strings, lists, and objects into a single source of truth for our analysis engine.
@@ -22,10 +22,10 @@ Mapping the NPM registry's messy license metadata was our biggest hurdle. We bui
 ---
 
 ## 🛠 Tech Stack
-- **Framework:** [FastAPI](https://fastapi.tiangolo.com/) (Chosen for its high performance and automatic OpenAPI/Swagger generation).
-- **Intelligence:** [Google Gemini 1.5 Flash](https://ai.google.dev/) (Used for contextual risk analysis and logical reasoning).
-- **State Management:** Local In-Memory SPDX Database (Loaded from `licenses.json` on startup for O(1) lookups).
-- **Registry Integration:** [Httpx](https://www.python-httpx.org/) (Asynchronous fetching of real-time metadata from the NPM registry).
+- **Framework:** [FastAPI](https://fastapi.tiangolo.com/)
+- **Intelligence:** [Google Gemini 1.5 Flash](https://ai.google.dev/)
+- **Registry Integration:** [Httpx](https://www.python-httpx.org/)
+- **Data Validation:** [Pydantic v2](https://docs.pydantic.dev/)
 
 ---
 
@@ -35,7 +35,7 @@ Mapping the NPM registry's messy license metadata was our biggest hurdle. We bui
    ```bash
    pip install -r requirements.txt
    ```
-2. **Download the State (SPDX Data):**
+2. **Download the SPDX Data:**
    ```bash
    curl -o "licenses.json" "https://raw.githubusercontent.com/spdx/license-list-data/master/json/licenses.json"
    ```
@@ -60,7 +60,7 @@ AI-powered library discovery based on license requirements.
 ```bash
 curl -X POST "http://127.0.0.1:8000/v1/search" \
      -H "Content-Type: application/json" \
-     -d '{ "query": "Chart library for closed source" }'
+     -d '{ "query": "Chart library for a closed-source SaaS" }'
 ```
 **Expected Response:**
 ```json
@@ -69,7 +69,7 @@ curl -X POST "http://127.0.0.1:8000/v1/search" \
     {
       "name": "Chart.js",
       "license": "MIT",
-      "reason": "Very popular, lightweight, and the MIT license is highly permissive for commercial use."
+      "reason": "Highly popular, permissive MIT license, and easy to integrate."
     },
     {
       "name": "ApexCharts",
@@ -111,10 +111,10 @@ curl -X POST "http://127.0.0.1:8000/v1/analyze" \
 ```json
 {
   "risk_score": 85,
-  "summary": "High risk for commercial SaaS due to SSPL license.",
+  "summary": "High risk due to SSPL license in a commercial SaaS context.",
   "warnings": [
     "SSPL is not OSI-approved.",
-    "May require open-sourcing your infrastructure code if modified."
+    "Potential requirement to open-source your infrastructure code."
   ]
 }
 ```
@@ -124,13 +124,14 @@ Batch "Traffic Light" scan (SAFE/WARN) for a list of packages.
 ```bash
 curl -X POST "http://127.0.0.1:8000/v1/audit" \
      -H "Content-Type: application/json" \
-     -d '{ "dependencies": ["react", "ffmpeg"] }'
+     -d '{ "dependencies": ["react", "lodash", "ffmpeg"] }'
 ```
 **Expected Response:**
 ```json
 {
   "results": [
     { "package": "react", "license": "MIT", "status": "SAFE" },
+    { "package": "lodash", "license": "MIT", "status": "SAFE" },
     { "package": "ffmpeg", "license": "LGPL-2.1", "status": "WARN" }
   ]
 }
@@ -165,11 +166,24 @@ curl -X POST "http://127.0.0.1:8000/v1/generate-header" \
 **Expected Response:**
 ```json
 {
-  "header_text": "# Copyright (c) 2026 Nebula\n# Licensed under the MIT License.\n# See LICENSE file in the project root for full license information."
+  "header_text": "# Copyright (c) 2026 Nebula\n# Licensed under the MIT License."
 }
 ```
 
 ---
 
-## 💡 Innovation & Utility
-OSLI isn't just a wrapper. It uses **Stateful Data** (the SPDX database) to ensure legal correctness, and **Generative AI** to provide human-readable strategy. It solves the "License Paradox": knowing a license is `GPL` is easy, but knowing *why* that's a problem for your specific startup is what OSLI delivers.
+## ⚠️ Error Handling & Correctness
+
+OSLI prioritizes informative feedback over generic errors. We follow standard HTTP status codes:
+
+- **200 OK**: Request was successful.
+- **400 Bad Request**: Invalid SPDX License ID or missing parameters.
+- **404 Not Found**: Package not found on NPM or License ID does not exist in SPDX database.
+- **500 Internal Server Error**: Issues with AI inference or upstream registry timeouts.
+
+**Example 400 Response (Invalid License):**
+```json
+{
+  "detail": "License ID 'Apache' is not recognized. Check https://spdx.org/licenses/ for valid IDs (e.g., 'MIT', 'Apache-2.0')."
+}
+```
