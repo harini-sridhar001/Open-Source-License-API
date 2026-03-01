@@ -9,7 +9,9 @@
 The OSLI API is officially deployed and ready for use. You can explore the endpoints, view data schemas, and test requests directly from your browser.
 
 Official Website & Full Documentation: [Insert Your Website Link Here]
+
 Interactive API Docs (Swagger UI): https://open-source-license-api.onrender.com/docs
+
 Base API URL: https://open-source-license-api.onrender.com
 
 ### 💡 The Inspiration
