@@ -1,5 +1,5 @@
 # OSLI: Open Source License Intelligence API
-### *2026 HackIllinois Submission: Best Web API Track*
+
 
 **OSLI** is an intelligent compliance engine designed to bridge the gap between complex open-source legal jargon and real-world developer workflows. By combining **deterministic SPDX data** with **Gemini AI reasoning**, OSLI provides a developer experience that is predictable, correct, and delightful.
 
