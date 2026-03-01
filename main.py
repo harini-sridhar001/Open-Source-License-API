@@ -325,7 +325,6 @@ async def generate_header(request: HeaderRequest):
     holder = request.copyright_holder or request.project_name
     from datetime import datetime
     year = datetime.now().year
-
     model = genai.GenerativeModel('gemini-2.5-flash')
     prompt = f"Generate a {request.license_id} header for project '{request.project_name}' in {request.language} for holder '{holder}' (Year {year}). Raw text only, no markdown."
     
