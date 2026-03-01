@@ -5,7 +5,12 @@
 
 ---
 
-## 📖 Project Story
+## OSLI API Access & Documentation
+The OSLI API is officially deployed and ready for use. You can explore the endpoints, view data schemas, and test requests directly from your browser.
+
+Official Website & Full Documentation: [Insert Your Website Link Here]
+Interactive API Docs (Swagger UI): https://open-source-license-api.onrender.com/docs
+Base API URL: https://open-source-license-api.onrender.com
 
 ### 💡 The Inspiration
 Every developer has been there: you find the perfect open-source library that solves all your problems, only to realize your company’s legal team might reject it because of a "Copyleft" clause or a restrictive license you don't fully understand. In the high-speed world of modern software engineering, **legal compliance is the ultimate bottleneck.** We built OSLI to act as a "Digital Legal Assistant," turning complex legal jargon into actionable, developer-friendly data.
