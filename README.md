@@ -13,6 +13,17 @@
 
 ---
 
+## 🌍 Live API & Documentation
+
+The OSLI API is deployed and ready for use. You can explore the interactive documentation and test endpoints directly from your browser:
+
+- **Interactive API Docs (Swagger UI):** [https://open-source-license-api.onrender.com/docs](https://open-source-license-api.onrender.com/docs)
+- **Base API URL:** `https://open-source-license-api.onrender.com`
+
+> **Note:** Since this is a live deployment, you can replace `http://127.0.0.1:8000` with `https://open-source-license-api.onrender.com` in any of the example `curl` commands below to test them against the production server.
+
+---
+
 ## 🚀 Quick Start (Localhost)
 
 1. **Install Dependencies:**
